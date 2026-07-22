@@ -1,0 +1,73 @@
+name: Build with Docker and Deploy to cPanel via FTP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        run: |
+          docker build -t my-app .
+
+      - name: Extract Build Files from Docker
+        run: |
+          docker create --name temp_container my-app
+          docker cp temp_container:/var/www/html ./build_output
+          docker rm temp_container
+
+      - name: Clean unwanted folders from build_output
+        run: |
+          rm -rf ./build_output/vendor
+          rm -rf ./build_output/vendor_old
+          rm -rf ./build_output/system
+          rm -rf ./build_output/node_modules
+          rm -rf ./build_output/storage
+          rm -rf ./build_output/public/upload
+          rm -rf ./build_output/public/uploads
+          rm -rf ./build_output/public/storage
+          rm -rf ./build_output/public/assets/img/
+          rm -rf ./build_output/.git
+          rm -f ./build_output/.gitignore
+          rm -f ./build_output/.gitattributes
+
+      # FTP only — port 21 (no SFTP/22, no FTPS/990) 
+      - name: Deploy to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: /
+          local-dir: ./build_output/
+          protocol: ftp
+          port: 21
+          timeout: 600000
+          exclude: |
+            **/.git*
+            **/.env
+            **/vendor/**
+            **/vendor_old/**
+            **/system/**
+            **/node_modules/**
+            **/storage/**
+            **/public/upload/**
+            **/public/uploads/**
+            **/public/storage/**
+            **/public/assets/img/**
+            **/app/Config/App.php
+            **/app/Config/Database.php
+            **/app/Config/Email.php
+            **/app/Config/Paths.php
+            **/app/Config/Encryption.php
+            **/app/Config/Logger.php
